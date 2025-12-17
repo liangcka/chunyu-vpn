@@ -8,7 +8,7 @@ online-fix 跟本项目同原理使用 Steam 网络进行联机，从 2017 年�
 
 ##  项目简介
 
-ChunyuVPN 是一款基于 ConnectTool 重制的图形化 VPN 工具，相比主线分支优化了跨平台支持、网络性能以及拥有更好的 UI 界面。可以利用 Steam Network 进行 TCP/UDP 转发或类似 Tailscale 的异地组网效果（TUN 模式）。
+ChunyuVPN 是一款基于 ConnectTool 重制的图形化 VPN 工具，相比主线分支添加了UDP、网络性能以及拥有更好的 UI 界面。可以利用 Steam Network 进行 TCP/UDP 转发或类似 Tailscale 的异地组网效果（TUN 模式）。
 
 ##  主要特性
 
