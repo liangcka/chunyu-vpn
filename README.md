@@ -29,6 +29,8 @@ ChunyuVPN 是一款基于 ConnectTool 重制的图形化 VPN 工具，相比主�
   - 低延迟连接优化
 
 ###  待开发特性
+- Linux平台支持
+- Macos 平台支持
 - Android 平台支持
 - iOS 平台支持
 - Web 管理界面
