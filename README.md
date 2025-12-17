@@ -45,9 +45,6 @@ ChunyuVPN 是一款基于 ConnectTool 重制的图形化 VPN 工具，相比主�
 <img src="./screenshot/screenshot-4.png" width="45%" />
 </div>
 
-## 📺 视频教程
-
-- [B站傻瓜式教程](https://www.bilibili.com/video/BV1geS4BUEKy)
 
 ### 技术讨论
 - GitHub Issues：报告 Bug 和请求功能
