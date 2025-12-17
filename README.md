@@ -52,7 +52,7 @@ ChunyuVPN 是一款基于 ConnectTool 重制的图形化 VPN 工具，相比主�
 
 ### Windows 用户
 1. 前往 [Releases 页面](https://github.com/liangcka/chunyu-vpn/releases) 下载最新版本
-2. 解压后运行 `connecttool-qt.exe`
+2. 解压后运行 `chunyuvpn.exe`
 3. 按照界面提示进行配置
 
 ##  开发环境
