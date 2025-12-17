@@ -21,6 +21,8 @@ constexpr const char *kLobbyModeTun = "tun";
 constexpr const char *kLobbyModeTcp = "tcp";
 constexpr const char *kLobbyModeUdp = "udp";
 constexpr int kLobbyMaxMembers = 250; // Allow more than the default 4 slots
+constexpr const char *kLobbyKeyLocalPort = "ct_local_port";
+constexpr const char *kLobbyKeyBindPort = "ct_bind_port";
 } // namespace
 
 SteamFriendsCallbacks::SteamFriendsCallbacks(SteamNetworkingManager *manager,
@@ -660,6 +662,17 @@ void SteamRoomManager::refreshLobbyMetadata() {
     modeStr = kLobbyModeUdp;
   }
   SteamMatchmaking()->SetLobbyData(currentLobby, kLobbyKeyMode, modeStr);
+
+  if (advertisedLocalPort_ > 0) {
+    SteamMatchmaking()->SetLobbyData(
+        currentLobby, kLobbyKeyLocalPort,
+        std::to_string(advertisedLocalPort_).c_str());
+  }
+  if (advertisedBindPort_ > 0) {
+    SteamMatchmaking()->SetLobbyData(
+        currentLobby, kLobbyKeyBindPort,
+        std::to_string(advertisedBindPort_).c_str());
+  }
 }
 
 void SteamRoomManager::decideTransportForCurrentLobby() {
