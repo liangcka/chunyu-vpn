@@ -65,7 +65,7 @@
 #include <vector>
 
 #ifndef CONNECTTOOL_VERSION
-#define CONNECTTOOL_VERSION "0.0.0"
+#define CONNECTTOOL_VERSION "0.8.41"
 #endif
 
 namespace {
@@ -539,6 +539,10 @@ void Backend::setLocalPort(int port) {
   }
   localPort_ = port;
   emit localPortChanged();
+  if (roomManager_) {
+    roomManager_->setAdvertisedPorts(localPort_, localBindPort_);
+    roomManager_->refreshLobbyMetadata();
+  }
 }
 
 void Backend::setLocalBindPort(int port) {
@@ -548,6 +552,10 @@ void Backend::setLocalBindPort(int port) {
   }
   localBindPort_ = port;
   emit localBindPortChanged();
+  if (roomManager_) {
+    roomManager_->setAdvertisedPorts(localPort_, localBindPort_);
+    roomManager_->refreshLobbyMetadata();
+  }
 }
 
 bool Backend::tryInitializeSteam() {
@@ -603,6 +611,7 @@ bool Backend::tryInitializeSteam() {
   steamManager_->setRoomManager(roomManager_.get());
   roomManager_->setAdvertisedMode(inTunMode());
   roomManager_->setAdvertisedIsUdp(inUdpMode());
+  roomManager_->setAdvertisedPorts(localPort_, localBindPort_);
   roomManager_->setLobbyName(roomName_.toStdString());
   roomManager_->setPublishLobby(publishLobby_);
   roomManager_->setLobbyInviteCallback([this](const CSteamID &lobby) {
@@ -1354,16 +1363,61 @@ bool Backend::applyLobbyModePreference(const CSteamID &lobby) {
   if (!roomManager_ || !lobby.IsValid() || !lobby.IsLobby()) {
     return false;
   }
-  const bool wantsTun = roomManager_->lobbyWantsTun(lobby);
+  bool wantsTun = roomManager_->lobbyWantsTun(lobby);
   ConnectionMode desired = connectionMode_;
-  if (wantsTun) {
-    desired = ConnectionMode::Tun;
-  } else if (connectionMode_ == ConnectionMode::Tun) {
-    desired = ConnectionMode::Tcp;
+
+  const char *modeStr = nullptr;
+  if (SteamMatchmaking()) {
+    modeStr = SteamMatchmaking()->GetLobbyData(lobby, kLobbyKeyMode);
   }
+  if (modeStr && modeStr[0] != '\0') {
+    const QString mode = QString::fromUtf8(modeStr);
+    if (mode == QStringLiteral("tun")) {
+      wantsTun = true;
+      desired = ConnectionMode::Tun;
+    } else if (mode == QStringLiteral("udp")) {
+      wantsTun = false;
+      desired = ConnectionMode::Udp;
+    } else if (mode == QStringLiteral("tcp")) {
+      wantsTun = false;
+      desired = ConnectionMode::Tcp;
+    }
+  } else {
+    if (wantsTun) {
+      desired = ConnectionMode::Tun;
+    } else if (connectionMode_ == ConnectionMode::Tun) {
+      desired = ConnectionMode::Tcp;
+    }
+  }
+
   if (connectionMode_ != desired) {
     setConnectionMode(static_cast<int>(desired));
   }
+
+  if (!isHost() && SteamMatchmaking()) {
+    const char *localPortStr =
+        SteamMatchmaking()->GetLobbyData(lobby, "ct_local_port");
+    if (localPortStr && localPortStr[0] != '\0') {
+      bool ok = false;
+      const int advertisedPort =
+          QString::fromUtf8(localPortStr).toInt(&ok);
+      if (ok && advertisedPort >= 0 && advertisedPort <= 65535) {
+        setLocalPort(advertisedPort);
+      }
+    }
+
+    const char *bindPortStr =
+        SteamMatchmaking()->GetLobbyData(lobby, "ct_bind_port");
+    if (bindPortStr && bindPortStr[0] != '\0') {
+      bool ok = false;
+      const int advertisedBind =
+          QString::fromUtf8(bindPortStr).toInt(&ok);
+      if (ok && advertisedBind >= 1 && advertisedBind <= 65535) {
+        setLocalBindPort(advertisedBind);
+      }
+    }
+  }
+
   return wantsTun;
 }
 
