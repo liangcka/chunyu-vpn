@@ -131,7 +131,7 @@ ctest --output-on-failure
 
 ##  联系方式
 
-- **项目维护者**：Ji Fuyao
+- **项目维护者**：xingyu
 - **GitHub Issues**：[问题反馈]https://github.com/liangcka/chunyu-vpn/issues)
 - **QQ 群**：1026108842
 
