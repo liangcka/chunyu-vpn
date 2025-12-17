@@ -13,7 +13,6 @@ ChunyuVPN 是一款基于 ConnectTool 重制的图形化 VPN 工具，相比主�
 ##  主要特性
 
 ###  已实现功能
-- **跨平台支持**：完美支持 Windows/Linux/macOS
 - **双模式支持**：
   - TCP 转发模式：单一端口转发
   - UDP 转发模式：单一端口转发
@@ -56,34 +55,6 @@ ChunyuVPN 是一款基于 ConnectTool 重制的图形化 VPN 工具，相比主�
 1. 前往 [Releases 页面](https://github.com/liangcka/chunyu-vpn/releases) 下载最新版本
 2. 解压后运行 `connecttool-qt.exe`
 3. 按照界面提示进行配置
-
-### Linux/macOS 用户
-```bash
-# 安装依赖（以 Ubuntu 为例）
-sudo apt-get install qt6-base-dev qt6-declarative-dev build-essential cmake
-
-# 克隆仓库
-git clone https://github.com/liangcka/chunyu-vpn.git
-cd chunyu-vpn
-
-# 构建项目
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-
-# 运行
-./connecttool-qt
-```
-
-### Nix 用户
-```bash
-# 首先安装好 nix 包管理器
-curl -sSf -L https://install.lix.systems/lix | sh -s -- install
-
-# 进入项目目录后
-nix-build
-./result/bin/connecttool-qt
-```
 
 ##  开发环境
 
