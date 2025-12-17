@@ -77,6 +77,10 @@ public:
   void setLobbyName(const std::string &name);
   void setAdvertisedMode(bool wantsTun) { advertisedWantsTun_ = wantsTun; }
   void setAdvertisedIsUdp(bool isUdp) { advertisedIsUdp_ = isUdp; }
+  void setAdvertisedPorts(int localPort, int bindPort) {
+    advertisedLocalPort_ = localPort;
+    advertisedBindPort_ = bindPort;
+  }
   void setPublishLobby(bool publish);
   std::string getLobbyName() const;
   void setLobbyListCallback(
@@ -133,6 +137,8 @@ private:
   bool publishLobby_ = true;
   bool advertisedWantsTun_ = false;
   bool advertisedIsUdp_ = false;
+  int advertisedLocalPort_ = 0;
+  int advertisedBindPort_ = 0;
   struct PingInfo {
     int ping = -1;
     std::string relay;
