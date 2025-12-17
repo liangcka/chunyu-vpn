@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Network QmlModels Core5Compat Widgets)
 
 # Read version from git tag if available
-set(CONNECTTOOL_VERSION "0.8.4")
+set(CONNECTTOOL_VERSION "0.8.41")
 if(DEFINED ENV{CONNECTTOOL_VERSION})
     set(CONNECTTOOL_VERSION "$ENV{CONNECTTOOL_VERSION}")
 endif()
