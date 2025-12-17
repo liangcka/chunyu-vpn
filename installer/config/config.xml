@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Installer>
+    <Name>ConnectTool</Name>
+    <Version>0.8.1</Version>
+    <Title>ConnectTool 安装器</Title>
+    <Publisher>chunyuvpn</Publisher>
+    <StartMenuDir>ConnectTool</StartMenuDir>
+    <TargetDir>@RootDir@/ConnectTool</TargetDir>
+    <InstallerApplicationIcon>../qml/ConnectTool/logo.ico</InstallerApplicationIcon>
+    <InstallerWindowIcon>../qml/ConnectTool/logo.ico</InstallerWindowIcon>
+    <Logo>../qml/ConnectTool/logo.ico</Logo>
+</Installer>

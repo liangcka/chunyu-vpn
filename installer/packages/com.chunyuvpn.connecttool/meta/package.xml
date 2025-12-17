@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>ConnectTool 应用程序</DisplayName>
+    <Description>ConnectTool 主程序及其 Qt 运行时。</Description>
+    <Version>0.8.1</Version>
+    <ReleaseDate>2025-01-01</ReleaseDate>
+    <Default>true</Default>
+    <Essential>true</Essential>
+</Package>
+
