@@ -1,6 +1,5 @@
 # ChunyuVPN
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Platform Support](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](https://github.com/moeleak/connecttool-qt/releases)
 
  **使用警告**   
 使用可能会导致Steam账号被[封禁](https://store.steampowered.com/subscriber_agreement/Steam#2)。若要使用本项目建议用小号。  
