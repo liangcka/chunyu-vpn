@@ -175,6 +175,12 @@ void SteamMatchmakingCallbacks::OnLobbyListReceived(LobbyMatchList_t *pCallback,
       info.mode = mode;
     }
 
+    const char *passwordHash =
+        SteamMatchmaking()->GetLobbyData(lobbyID, kLobbyKeyPasswordHash);
+    if (passwordHash && passwordHash[0] != '\0') {
+      info.hasPassword = true;
+    }
+
     infos.push_back(std::move(info));
   }
 
@@ -226,6 +232,12 @@ void SteamMatchmakingCallbacks::OnLobbyListReceived(LobbyMatchList_t *pCallback,
         info.mode = mode;
       }
 
+      const char *passwordHash =
+          SteamMatchmaking()->GetLobbyData(current, kLobbyKeyPasswordHash);
+      if (passwordHash && passwordHash[0] != '\0') {
+        info.hasPassword = true;
+      }
+
       infos.push_back(std::move(info));
     }
   }
@@ -257,9 +269,9 @@ void SteamMatchmakingCallbacks::OnLobbyDataUpdate(
   const bool wantsTun = roomManager_->lobbyWantsTun(lobby);
   if (wantsTun != roomManager_->vpnMode_) {
     roomManager_->vpnMode_ = wantsTun;
-    if (roomManager_->lobbyModeChangedCallback_) {
-      roomManager_->lobbyModeChangedCallback_(wantsTun, lobby);
-    }
+  }
+  if (roomManager_->lobbyModeChangedCallback_) {
+    roomManager_->lobbyModeChangedCallback_(wantsTun, lobby);
   }
 
   roomManager_->notifyPinnedMessageChanged(lobby);

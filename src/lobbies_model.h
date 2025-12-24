@@ -23,6 +23,7 @@ public:
     MemberCountRole,
     PingRole,
     ModeRole,
+    HasPasswordRole,
   };
 
   struct Entry {
@@ -33,6 +34,7 @@ public:
     int memberCount = 0;
     int ping = -1;
     QString mode;
+    bool hasPassword = false;
   };
 
   explicit LobbiesModel(QObject *parent = nullptr);

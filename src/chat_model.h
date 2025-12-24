@@ -21,7 +21,8 @@ public:
     MessageRole,
     IsSelfRole,
     TimestampRole,
-    IsPinnedRole
+    IsPinnedRole,
+    IsSystemRole
   };
 
   struct Entry {
@@ -31,6 +32,7 @@ public:
     QString message;
     bool isSelf = false;
     bool pinned = false;
+    bool isSystem = false;
     QDateTime timestamp;
   };
 

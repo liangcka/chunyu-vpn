@@ -4,9 +4,52 @@
 #include "../net/vpn_protocol.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstring>
 #include <iostream>
 #include <steam_api.h>
 #include <isteamnetworkingutils.h>
+
+namespace {
+int compareVersion(const std::string &a, const std::string &b) {
+  size_t i = 0;
+  size_t j = 0;
+  while (i < a.size() || j < b.size()) {
+    int x = 0;
+    int y = 0;
+    while (i < a.size() && a[i] != '.') {
+      if (a[i] >= '0' && a[i] <= '9') {
+        x = x * 10 + (a[i] - '0');
+      }
+      ++i;
+    }
+    while (j < b.size() && b[j] != '.') {
+      if (b[j] >= '0' && b[j] <= '9') {
+        y = y * 10 + (b[j] - '0');
+      }
+      ++j;
+    }
+    if (x < y) {
+      return -1;
+    }
+    if (x > y) {
+      return 1;
+    }
+    if (i < a.size()) {
+      ++i;
+    }
+    if (j < b.size()) {
+      ++j;
+    }
+  }
+  return 0;
+}
+
+long long unixTimeSeconds() {
+  using namespace std::chrono;
+  return duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
+}
+} // namespace
 
 SteamVpnNetworkingManager::SteamVpnNetworkingManager()
     : messagesInterface_(nullptr), messageHandler_(nullptr),
@@ -24,13 +67,12 @@ bool SteamVpnNetworkingManager::initialize() {
     return false;
   }
 
-  // Align bandwidth/Nagle settings with the Qt TCP mode defaults
-  int32 sendBufferSize = 2 * 1024 * 1024;
+  int32 sendBufferSize = 4 * 1024 * 1024;
   SteamNetworkingUtils()->SetConfigValue(
       k_ESteamNetworkingConfig_SendBufferSize, k_ESteamNetworkingConfig_Global,
       0, k_ESteamNetworkingConfig_Int32, &sendBufferSize);
 
-  int32 recvBufferSize = 2 * 1024 * 1024;
+  int32 recvBufferSize = 4 * 1024 * 1024;
   SteamNetworkingUtils()->SetConfigValue(
       k_ESteamNetworkingConfig_RecvBufferSize, k_ESteamNetworkingConfig_Global,
       0, k_ESteamNetworkingConfig_Int32, &recvBufferSize);
@@ -39,8 +81,7 @@ bool SteamVpnNetworkingManager::initialize() {
       k_ESteamNetworkingConfig_RecvBufferMessages,
       k_ESteamNetworkingConfig_Global, 0, k_ESteamNetworkingConfig_Int32,
       &recvBufferMsgs);
-
-  int32 sendRate = 1024 * 1024;
+  int32 sendRate = 4 * 1024 * 1024;
   SteamNetworkingUtils()->SetConfigValue(
       k_ESteamNetworkingConfig_SendRateMin, k_ESteamNetworkingConfig_Global, 0,
       k_ESteamNetworkingConfig_Int32, &sendRate);
@@ -141,11 +182,25 @@ void SteamVpnNetworkingManager::addPeer(CSteamID peerID) {
   messagesInterface_->AcceptSessionWithUser(identity);
   VpnMessageHeader hello{};
   hello.type = VpnMessageType::SESSION_HELLO;
-  hello.length = 0;
+  SessionHelloPayload payload{};
+  std::memset(&payload, 0, sizeof(payload));
+  if (!localVersion_.empty()) {
+    const size_t maxLen = VPN_VERSION_MAX_LEN - 1;
+    const size_t copyLen = std::min(localVersion_.size(), maxLen);
+    std::memcpy(payload.version, localVersion_.data(), copyLen);
+    payload.version[copyLen] = '\0';
+  }
+  payload.capabilities = 0;
+  payload.capabilities |= VPN_CAP_PASSWORD;
+  hello.length = htons(static_cast<uint16_t>(sizeof(SessionHelloPayload)));
+  uint8_t buffer[sizeof(VpnMessageHeader) + sizeof(SessionHelloPayload)];
+  std::memcpy(buffer, &hello, sizeof(VpnMessageHeader));
+  std::memcpy(buffer + sizeof(VpnMessageHeader), &payload,
+              sizeof(SessionHelloPayload));
   const int flags = k_nSteamNetworkingSend_Reliable |
                     k_nSteamNetworkingSend_AutoRestartBrokenSession;
   const EResult result = messagesInterface_->SendMessageToUser(
-      identity, &hello, sizeof(hello), flags, VPN_CHANNEL);
+      identity, buffer, sizeof(buffer), flags, VPN_CHANNEL);
   if (result == k_EResultOK) {
     std::cout << "[SteamVPN] Sent SESSION_HELLO to "
               << peerID.ConvertToUint64() << std::endl;
@@ -279,6 +334,90 @@ void SteamVpnNetworkingManager::handleIncomingVpnMessage(
     return;
   }
   vpnBridge_->handleVpnMessage(data, size, senderSteamID);
+}
+
+void SteamVpnNetworkingManager::handleSessionHello(const uint8_t *data,
+                                                   size_t size,
+                                                   CSteamID senderSteamID) {
+  if (size < sizeof(VpnMessageHeader)) {
+    return;
+  }
+  VpnMessageHeader header{};
+  std::memcpy(&header, data, sizeof(VpnMessageHeader));
+  const uint16_t payloadLength = ntohs(header.length);
+  const size_t available = size > sizeof(VpnMessageHeader)
+                               ? size - sizeof(VpnMessageHeader)
+                               : 0;
+  std::string remoteVersion;
+  uint8_t remoteCapabilities = 0;
+  if (payloadLength >= sizeof(SessionHelloPayload) &&
+      available >= sizeof(SessionHelloPayload)) {
+    SessionHelloPayload payload{};
+    std::memcpy(&payload, data + sizeof(VpnMessageHeader),
+                sizeof(SessionHelloPayload));
+    char versionBuf[VPN_VERSION_MAX_LEN + 1];
+    std::memcpy(versionBuf, payload.version, VPN_VERSION_MAX_LEN);
+    versionBuf[VPN_VERSION_MAX_LEN] = '\0';
+    remoteVersion = std::string(versionBuf);
+    while (!remoteVersion.empty() &&
+           (remoteVersion.back() == '\0' || remoteVersion.back() == ' ')) {
+      remoteVersion.pop_back();
+    }
+    remoteCapabilities = payload.capabilities;
+  }
+
+  bool blocked = false;
+  const std::string minSupportedVersion = "0.8.0";
+  if (!remoteVersion.empty() &&
+      compareVersion(remoteVersion, minSupportedVersion) < 0) {
+    blocked = true;
+  }
+  if (!blocked && passwordProtected_ &&
+      (remoteCapabilities & VPN_CAP_PASSWORD) == 0) {
+    blocked = true;
+  }
+
+  std::string remoteIp = "";
+  if (messagesInterface_) {
+    SteamNetworkingIdentity identity;
+    identity.SetSteamID(senderSteamID);
+    SteamNetConnectionInfo_t info;
+    const ESteamNetworkingConnectionState state =
+        messagesInterface_->GetSessionConnectionInfo(identity, &info, nullptr);
+    if (state == k_ESteamNetworkingConnectionState_Connected) {
+      char buf[64];
+      info.m_addrRemote.ToString(buf, sizeof(buf), true);
+      remoteIp = std::string(buf);
+    }
+  }
+
+  const std::string versionForLog =
+      remoteVersion.empty() ? std::string("unknown") : remoteVersion;
+
+  if (blocked) {
+    {
+      std::lock_guard<std::mutex> lock(peersMutex_);
+      peers_.erase(senderSteamID);
+    }
+    if (messagesInterface_) {
+      SteamNetworkingIdentity identity;
+      identity.SetSteamID(senderSteamID);
+      messagesInterface_->CloseSessionWithUser(identity);
+    }
+    std::cout << "[SteamVPN] ts=" << unixTimeSeconds()
+              << " blocked peer=" << senderSteamID.ConvertToUint64()
+              << " ip=" << (remoteIp.empty() ? "N/A" : remoteIp)
+              << " version=" << versionForLog << std::endl;
+    if (clientBlockedCallback_) {
+      clientBlockedCallback_(senderSteamID, versionForLog);
+    }
+    return;
+  }
+
+  std::cout << "[SteamVPN] ts=" << unixTimeSeconds()
+            << " accepted peer=" << senderSteamID.ConvertToUint64()
+            << " ip=" << (remoteIp.empty() ? "N/A" : remoteIp)
+            << " version=" << versionForLog << std::endl;
 }
 
 void SteamVpnNetworkingManager::OnSessionRequest(

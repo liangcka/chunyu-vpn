@@ -29,6 +29,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QIcon>
+#include <QDate>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -57,8 +58,12 @@ int main(int argc, char *argv[]) {
   QCoreApplication::setApplicationVersion(QStringLiteral(CONNECTTOOL_VERSION));
 
   QApplication app(argc, argv);
-  app.setWindowIcon(
-      QIcon(QStringLiteral(":/qt/qml/chunyuvpn/qml/ConnectTool/logo.ico")));
+  const QDate today = QDate::currentDate();
+  const QString iconPath =
+      (today.month() == 12 && today.day() == 25)
+          ? QStringLiteral(":/qt/qml/chunyuvpn/qml/chunyuvpn/logo-Xmas.ico")
+          : QStringLiteral(":/qt/qml/chunyuvpn/qml/chunyuvpn/logo.ico");
+  app.setWindowIcon(QIcon(iconPath));
   QQuickStyle::setStyle(QStringLiteral("Material"));
 
   qmlRegisterUncreatableType<FriendsModel>("chunyuvpn", 1, 0, "FriendsModel",

@@ -36,24 +36,10 @@ SteamNetworkingManager::~SteamNetworkingManager() {
 bool SteamNetworkingManager::initialize() {
   instance = this;
 
-  // Steam API should already be initialized before calling this
   if (!SteamAPI_IsSteamRunning()) {
     std::cerr << "Steam is not running" << std::endl;
     return false;
   }
-
-  // 【新增】开启详细日志
-  SteamNetworkingUtils()->SetDebugOutputFunction(
-      k_ESteamNetworkingSocketsDebugOutputType_Msg,
-      [](ESteamNetworkingSocketsDebugOutputType nType, const char *pszMsg) {
-        std::cout << "[SteamNet] " << pszMsg << std::endl;
-      });
-
-  int32 logLevel = k_ESteamNetworkingSocketsDebugOutputType_Verbose;
-  SteamNetworkingUtils()->SetConfigValue(
-      k_ESteamNetworkingConfig_LogLevel_P2PRendezvous,
-      k_ESteamNetworkingConfig_Global, 0, k_ESteamNetworkingConfig_Int32,
-      &logLevel);
 
   // Increase default reliable send buffer to better handle large bursts
   int32 sendBufferSize = 2 * 1024 * 1024;
@@ -61,8 +47,7 @@ bool SteamNetworkingManager::initialize() {
       k_ESteamNetworkingConfig_SendBufferSize, k_ESteamNetworkingConfig_Global,
       0, k_ESteamNetworkingConfig_Int32, &sendBufferSize);
 
-  // Receive buffers tuned for moderate bandwidth to avoid runaway queues
-  int32 recvBufferSize = 2 * 1024 * 1024; // 2 MB
+  int32 recvBufferSize = 2 * 1024 * 1024;
   SteamNetworkingUtils()->SetConfigValue(
       k_ESteamNetworkingConfig_RecvBufferSize, k_ESteamNetworkingConfig_Global,
       0, k_ESteamNetworkingConfig_Int32, &recvBufferSize);
@@ -71,18 +56,13 @@ bool SteamNetworkingManager::initialize() {
       k_ESteamNetworkingConfig_RecvBufferMessages,
       k_ESteamNetworkingConfig_Global, 0, k_ESteamNetworkingConfig_Int32,
       &recvBufferMsgs);
-
-  // Cap send rate to a conservative value to keep reliable window stable
-  int32 sendRate = 1024 * 1024; // ~1000 KB/s
+  int32 sendRate = 4 * 1024 * 1024;
   SteamNetworkingUtils()->SetConfigValue(
       k_ESteamNetworkingConfig_SendRateMin, k_ESteamNetworkingConfig_Global, 0,
       k_ESteamNetworkingConfig_Int32, &sendRate);
   SteamNetworkingUtils()->SetConfigValue(
       k_ESteamNetworkingConfig_SendRateMax, k_ESteamNetworkingConfig_Global, 0,
       k_ESteamNetworkingConfig_Int32, &sendRate);
-
-  // Start with neutral penalties so ICE can be chosen normally; we'll adjust later
-  // based on measured pings in applyTransportPreference.
   int32 sdrPenaltyDefault = 0;
   int32 icePenaltyDefault = 0;
   SteamNetworkingUtils()->SetConfigValue(
@@ -93,8 +73,6 @@ bool SteamNetworkingManager::initialize() {
       k_ESteamNetworkingConfig_P2P_Transport_ICE_Penalty,
       k_ESteamNetworkingConfig_Global, 0, k_ESteamNetworkingConfig_Int32,
       &icePenaltyDefault);
-
-  // Disable Nagle to reduce latency for tunneled traffic
   int32 nagleTime = 0;
   SteamNetworkingUtils()->SetConfigValue(
       k_ESteamNetworkingConfig_NagleTime, k_ESteamNetworkingConfig_Global, 0,

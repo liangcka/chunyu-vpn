@@ -35,6 +35,8 @@ QVariant ChatModel::data(const QModelIndex &index, int role) const {
     return entry.timestamp;
   case IsPinnedRole:
     return entry.pinned;
+  case IsSystemRole:
+    return entry.isSystem;
   default:
     return {};
   }
@@ -44,7 +46,7 @@ QHash<int, QByteArray> ChatModel::roleNames() const {
   return {{SteamIdRole, "steamId"},       {DisplayNameRole, "displayName"},
           {AvatarRole, "avatar"},         {MessageRole, "message"},
           {IsSelfRole, "isSelf"},         {TimestampRole, "timestamp"},
-          {IsPinnedRole, "isPinned"}};
+          {IsPinnedRole, "isPinned"},     {IsSystemRole, "isSystem"}};
 }
 
 void ChatModel::appendMessage(Entry entry) {

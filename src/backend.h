@@ -116,6 +116,8 @@ class Backend : public QObject {
   Q_PROPERTY(bool darkThemeEnabled READ darkThemeEnabled WRITE setDarkThemeEnabled NOTIFY darkThemeEnabledChanged)
   Q_PROPERTY(double cardBackgroundOpacity READ cardBackgroundOpacity WRITE setCardBackgroundOpacity NOTIFY cardBackgroundOpacityChanged)
   Q_PROPERTY(QUrl customBackgroundImage READ customBackgroundImage WRITE setCustomBackgroundImage NOTIFY customBackgroundImageChanged)
+  Q_PROPERTY(bool networkCheckRunning READ networkCheckRunning NOTIFY networkCheckChanged)
+  Q_PROPERTY(QVariantList networkCheckResults READ networkCheckResults NOTIFY networkCheckChanged)
 
 public:
   enum class ConnectionMode { Tcp = 0, Tun = 1, Udp = 2 };
@@ -172,6 +174,8 @@ public:
   bool darkThemeEnabled() const { return darkThemeEnabled_; }
   double cardBackgroundOpacity() const { return cardBackgroundOpacity_; }
   QUrl customBackgroundImage() const { return customBackgroundImage_; }
+  bool networkCheckRunning() const { return networkCheckRunning_; }
+  QVariantList networkCheckResults() const { return networkCheckResults_; }
 
   void setJoinTarget(const QString &id);
   void setPublishLobby(bool publish);
@@ -190,6 +194,8 @@ public:
   Q_INVOKABLE void startHosting();
   Q_INVOKABLE void joinHost();
   Q_INVOKABLE void joinLobby(const QString &lobbyId);
+  Q_INVOKABLE bool joinLobbyWithPassword(const QString &lobbyId,
+                                         const QString &password);
   Q_INVOKABLE void disconnect();
   Q_INVOKABLE void refreshFriends();
   Q_INVOKABLE void refreshLobbies();
@@ -213,8 +219,16 @@ public:
   void setChatNotificationMode(int mode);
   Q_INVOKABLE void setDarkThemeEnabled(bool enabled);
   Q_INVOKABLE void disableSteamLaunchPrompt();
+  Q_INVOKABLE void relaunchAsAdmin();
   Q_INVOKABLE QUrl importBackgroundImage(const QUrl &source);
   Q_INVOKABLE void optimizeMemory();
+  Q_INVOKABLE void runNetworkSelfCheck();
+  Q_INVOKABLE void runNetworkQuickFix();
+  Q_INVOKABLE void runNetworkFixFor(const QString &key);
+  Q_INVOKABLE void setRoomPassword(const QString &password);
+  Q_INVOKABLE bool isChristmasToday() const;
+  Q_INVOKABLE bool shouldShowChristmasDialog() const;
+  Q_INVOKABLE void markChristmasDialogShown();
 
 signals:
   void stateChanged();
@@ -245,6 +259,7 @@ signals:
   void chatNotificationModeChanged();
   void cardBackgroundOpacityChanged();
   void customBackgroundImageChanged();
+  void networkCheckChanged();
 
 private:
   void tick();
@@ -286,6 +301,7 @@ private:
   void syncVpnPeers();
   void updateVpnInfo();
   bool applyLobbyModePreference(const CSteamID &lobby);
+  void applyLobbyMetadataForGuest(const CSteamID &lobby, bool wantsTun);
   bool inTunMode() const { return connectionMode_ == ConnectionMode::Tun; }
   bool inTcpMode() const { return connectionMode_ == ConnectionMode::Tcp; }
   bool inUdpMode() const { return connectionMode_ == ConnectionMode::Udp; }
@@ -294,6 +310,13 @@ private:
   bool ensureTunPrivileges();
   bool tryInitializeSteam();
   void refreshSelfSteamId();
+  void beginNetworkCheckItem(const QString &key, const QString &title,
+                             const QString &initialDetail);
+  void completeNetworkCheckItem(const QString &key, int status,
+                                const QString &title,
+                                const QString &detail);
+  void applyNetworkQuickFixes();
+  void handleVpnClientBlocked(uint64_t steamId, const QString &version);
 
   std::unique_ptr<SteamNetworkingManager> steamManager_;
   std::unique_ptr<SteamVpnNetworkingManager> vpnManager_;
@@ -378,4 +401,9 @@ private:
   double cardBackgroundOpacity_ = 1.0;
   QUrl customBackgroundImage_;
   QSystemTrayIcon *trayIcon_ = nullptr;
+  bool networkCheckRunning_ = false;
+  QVariantList networkCheckResults_;
+  int pendingNetworkChecks_ = 0;
+  bool quickFixAfterCheck_ = false;
+  bool christmasDialogShown_ = false;
 };

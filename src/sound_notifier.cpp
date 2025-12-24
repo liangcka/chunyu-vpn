@@ -67,8 +67,11 @@ bool SoundNotifier::initialize(QWindow *window) {
 
 bool SoundNotifier::loadAlertSample() {
   const QStringList candidates = {
+#ifdef Q_OS_WIN
+      QStringLiteral("c:/Users/xingy/Downloads/connecttool-qt-main/qml/chunyuvpn/Windows Notify System Generic.wav"),
+#endif
       QStringLiteral(":/qt/qml/chunyuvpn/notify.wav"),
-      QStringLiteral(":/qt/qml/chunyuvpn/qml/ConnectTool/notify.wav"),
+      QStringLiteral(":/qt/qml/chunyuvpn/qml/chunyuvpn/notify.wav"),
       QStringLiteral(":/chunyuvpn/notify.wav"),
   };
 

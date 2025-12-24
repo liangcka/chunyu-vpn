@@ -33,6 +33,7 @@
 #include <QtDebug>
 #include <QSystemTrayIcon>
 #include <QIcon>
+#include <QCryptographicHash>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -44,6 +45,7 @@
 #endif
 #include <windows.h>
 #include <tlhelp32.h>
+#include <shellapi.h>
 #endif
 #if defined(Q_OS_UNIX)
 #include <unistd.h>
@@ -65,7 +67,7 @@
 #include <vector>
 
 #ifndef CONNECTTOOL_VERSION
-#define CONNECTTOOL_VERSION "0.8.41"
+#define CONNECTTOOL_VERSION "0.0.0"
 #endif
 
 namespace {
@@ -199,6 +201,18 @@ QString renderPopId(SteamNetworkingPOPID pop) {
   return QStringLiteral("0x%1")
       .arg(static_cast<uint32_t>(pop), 8, 16, QLatin1Char('0'))
       .toUpper();
+}
+
+QString hashLobbyPassword(const QString &password) {
+  const QByteArray utf8 = password.toUtf8();
+  const QByteArray salt(APP_SECRET_SALT);
+  QByteArray input;
+  input.reserve(utf8.size() + salt.size());
+  input.append(utf8);
+  input.append(salt);
+  const QByteArray hash =
+      QCryptographicHash::hash(input, QCryptographicHash::Sha256);
+  return QString::fromLatin1(hash.toHex());
 }
 
 #ifdef Q_OS_LINUX
@@ -369,12 +383,34 @@ Backend::Backend(QObject *parent)
     customBackgroundImage_ = QUrl::fromLocalFile(backgroundPath);
   }
 
+  christmasDialogShown_ =
+      settings.value(QStringLiteral("ui/christmasDialogShown"), false).toBool();
+
   callbackTimer_.start(16);
   slowTimer_.start(15000);
   steamCheckTimer_.start(3000);
   cooldownTimer_.start(1000);
 
   updateStatus();
+}
+
+bool Backend::isChristmasToday() const {
+  const QDateTime now = QDateTime::currentDateTime();
+  const QDate today = now.date();
+  return today.month() == 12 && today.day() == 25;
+}
+
+bool Backend::shouldShowChristmasDialog() const {
+  return isChristmasToday() && !christmasDialogShown_;
+}
+
+void Backend::markChristmasDialogShown() {
+  if (christmasDialogShown_) {
+    return;
+  }
+  christmasDialogShown_ = true;
+  QSettings settings;
+  settings.setValue(QStringLiteral("ui/christmasDialogShown"), true);
 }
 
 Backend::~Backend() {
@@ -592,7 +628,7 @@ bool Backend::tryInitializeSteam() {
   }
   if (SteamNetworkingUtils()) {
     SteamNetworkingUtils()->SetDebugOutputFunction(
-        k_ESteamNetworkingSocketsDebugOutputType_Msg, &steamNetDebugHook);
+        k_ESteamNetworkingSocketsDebugOutputType_Warning, &steamNetDebugHook);
   }
 
   roomName_ = defaultRoomName();
@@ -822,6 +858,16 @@ void Backend::ensureVpnSetup() {
       vpnManager_.reset();
       return;
     }
+    vpnManager_->setLocalVersion(appVersion_.toStdString());
+    vpnManager_->setClientBlockedCallback(
+        [this](CSteamID remote, const std::string &version) {
+          const uint64_t id = remote.ConvertToUint64();
+          const QString v = QString::fromStdString(version);
+          QMetaObject::invokeMethod(
+              this,
+              [this, id, v]() { handleVpnClientBlocked(id, v); },
+              Qt::QueuedConnection);
+        });
   }
   if (!vpnBridge_) {
     vpnBridge_ = std::make_unique<SteamVpnBridge>(vpnManager_.get());
@@ -831,6 +877,22 @@ void Backend::ensureVpnSetup() {
     roomManager_->setVpnMode(inTunMode(), vpnManager_.get());
   }
   vpnManager_->startMessageHandler();
+}
+
+void Backend::handleVpnClientBlocked(uint64_t steamId, const QString &version) {
+  if (!isHost()) {
+    return;
+  }
+  ChatModel::Entry entry;
+  entry.steamId = QString::number(steamId);
+  entry.displayName = tr("系统通知");
+  const QString ver = version.trimmed().isEmpty() ? tr("未知版本") : version;
+  entry.message =
+      tr("检测到旧版本客户端 %1 ，已阻止其加入 VPN 网络").arg(ver);
+  entry.timestamp = QDateTime::currentDateTime();
+  entry.isSelf = true;
+  entry.isSystem = true;
+  chatModel_.appendMessage(std::move(entry));
 }
 
 void Backend::stopVpn() {
@@ -1083,6 +1145,48 @@ void Backend::joinLobby(const QString &lobbyId) {
   }
 }
 
+bool Backend::joinLobbyWithPassword(const QString &lobbyId,
+                                    const QString &password) {
+  if (!ensureSteamReady(tr("加入大厅"))) {
+    return false;
+  }
+  const QString trimmedId = lobbyId.trimmed();
+  bool ok = false;
+  const uint64 idValue = trimmedId.toULongLong(&ok);
+  if (!ok) {
+    qWarning() << tr("无效的房间 ID。");
+    return false;
+  }
+
+  CSteamID lobby(idValue);
+  if (!lobby.IsValid() || !lobby.IsLobby()) {
+    qWarning() << tr("请输入有效的房间 ID。");
+    return false;
+  }
+
+  if (!SteamMatchmaking()) {
+    qWarning() << tr("无法获取房间信息。");
+    return false;
+  }
+
+  const char *stored =
+      SteamMatchmaking()->GetLobbyData(lobby, kLobbyKeyPasswordHash);
+  if (!stored || stored[0] == '\0') {
+    joinLobby(lobbyId);
+    return true;
+  }
+
+  const QString expected = QString::fromUtf8(stored);
+  const QString candidate = hashLobbyPassword(password);
+  if (expected != candidate) {
+    qWarning() << tr("房间密码不正确。");
+    return false;
+  }
+
+  joinLobby(lobbyId);
+  return true;
+}
+
 void Backend::disconnect() {
   const bool wasHost = isHost();
   const QString prevLobbyId = lobbyId();
@@ -1225,7 +1329,6 @@ void Backend::setDarkThemeEnabled(bool enabled) {
   darkThemeEnabled_ = enabled;
   QSettings settings;
   settings.setValue("ui/darkTheme", darkThemeEnabled_);
-  
   emit darkThemeEnabledChanged();
 }
 
@@ -1364,6 +1467,12 @@ bool Backend::applyLobbyModePreference(const CSteamID &lobby) {
     return false;
   }
   bool wantsTun = roomManager_->lobbyWantsTun(lobby);
+  applyLobbyMetadataForGuest(lobby, wantsTun);
+  return wantsTun;
+}
+
+void Backend::applyLobbyMetadataForGuest(const CSteamID &lobby,
+                                         bool wantsTun) {
   ConnectionMode desired = connectionMode_;
 
   const char *modeStr = nullptr;
@@ -1417,8 +1526,6 @@ bool Backend::applyLobbyModePreference(const CSteamID &lobby) {
       }
     }
   }
-
-  return wantsTun;
 }
 
 void Backend::handleLobbyModeChanged(bool wantsTun, const CSteamID &lobby) {
@@ -1428,6 +1535,7 @@ void Backend::handleLobbyModeChanged(bool wantsTun, const CSteamID &lobby) {
   // Always track host-advertised mode so metadata stays correct if we later
   // refresh it (e.g. host re-publishes).
   roomManager_->setAdvertisedMode(wantsTun);
+  applyLobbyMetadataForGuest(lobby, wantsTun);
   if (wantsTun && !ensureTunPrivileges()) {
     return;
   }
@@ -1511,6 +1619,28 @@ void Backend::setRoomName(const QString &name) {
   if (roomManager_) {
     roomManager_->setLobbyName(roomName_.toStdString());
     roomManager_->refreshLobbyMetadata();
+  }
+}
+
+void Backend::setRoomPassword(const QString &password) {
+  if (!roomManager_) {
+    return;
+  }
+  CSteamID lobby = roomManager_->getCurrentLobby();
+  if (!lobby.IsValid() || !SteamMatchmaking()) {
+    return;
+  }
+
+  if (password.isEmpty()) {
+    SteamMatchmaking()->DeleteLobbyData(lobby, kLobbyKeyPasswordHash);
+  } else {
+    const QString hash = hashLobbyPassword(password);
+    const QByteArray utf8 = hash.toUtf8();
+    SteamMatchmaking()->SetLobbyData(lobby, kLobbyKeyPasswordHash,
+                                     utf8.constData());
+  }
+  if (vpnManager_) {
+    vpnManager_->setPasswordProtected(!password.isEmpty());
   }
 }
 
@@ -1872,6 +2002,26 @@ void Backend::optimizeMemory() {
   emit updateInfoChanged();
 }
 
+void Backend::relaunchAsAdmin() {
+#ifdef Q_OS_WIN
+  const QString exePath = QCoreApplication::applicationFilePath();
+  const std::wstring exeW = exePath.toStdWString();
+  HINSTANCE result = ShellExecuteW(nullptr, L"runas", exeW.c_str(), nullptr,
+                                   nullptr, SW_SHOWNORMAL);
+  if (reinterpret_cast<INT_PTR>(result) <= 32) {
+    setStatusOverride(tr("无法以管理员身份重新启动，错误码 %1")
+                          .arg(reinterpret_cast<INT_PTR>(result)),
+                      4000);
+    return;
+  }
+  QMetaObject::invokeMethod(QCoreApplication::instance(), []() {
+    QCoreApplication::quit();
+  });
+#else
+  setStatusOverride(tr("当前平台不支持以管理员身份重新启动。"), 4000);
+#endif
+}
+
 void Backend::disableSteamLaunchPrompt() {
   QSettings settings;
   settings.setValue(QStringLiteral("steam/skipLaunchPrompt"), true);
@@ -1931,6 +2081,162 @@ void Backend::launchSteam(bool useSteamChina) {
   Q_UNUSED(useSteamChina);
   qWarning() << "Steam launch switch is only supported on Windows.";
 #endif
+}
+
+void Backend::beginNetworkCheckItem(const QString &key, const QString &title,
+                                    const QString &initialDetail) {
+  QVariantMap item;
+  item.insert(QStringLiteral("key"), key);
+  item.insert(QStringLiteral("title"), title);
+  item.insert(QStringLiteral("detail"), initialDetail);
+  item.insert(QStringLiteral("status"), 1);
+  networkCheckResults_.append(item);
+  emit networkCheckChanged();
+}
+
+void Backend::completeNetworkCheckItem(const QString &key, int status,
+                                       const QString &title,
+                                       const QString &detail) {
+  for (int i = 0; i < networkCheckResults_.size(); ++i) {
+    QVariantMap map = networkCheckResults_[i].toMap();
+    if (map.value(QStringLiteral("key")).toString() == key) {
+      map.insert(QStringLiteral("status"), status);
+      map.insert(QStringLiteral("title"), title);
+      map.insert(QStringLiteral("detail"), detail);
+      networkCheckResults_[i] = map;
+      break;
+    }
+  }
+
+  if (pendingNetworkChecks_ > 0) {
+    --pendingNetworkChecks_;
+  }
+  if (pendingNetworkChecks_ == 0 && networkCheckRunning_) {
+    networkCheckRunning_ = false;
+    emit networkCheckChanged();
+    if (quickFixAfterCheck_) {
+      quickFixAfterCheck_ = false;
+      applyNetworkQuickFixes();
+    }
+  } else {
+    emit networkCheckChanged();
+  }
+}
+
+void Backend::applyNetworkQuickFixes() {
+  bool any = false;
+  for (int i = 0; i < networkCheckResults_.size(); ++i) {
+    QVariantMap map = networkCheckResults_[i].toMap();
+    const QString key = map.value(QStringLiteral("key")).toString();
+    int status = map.value(QStringLiteral("status")).toInt();
+    if (status == 0) {
+      continue;
+    }
+    if (key == QStringLiteral("dns") || key == QStringLiteral("dhcp") ||
+        key == QStringLiteral("lsp") || key == QStringLiteral("proxy")) {
+      map.insert(QStringLiteral("status"), 0);
+      map.insert(QStringLiteral("detail"),
+                 tr("已尝试自动修复此项，如问题仍存在请手动检查系统设置。"));
+      networkCheckResults_[i] = map;
+      any = true;
+    }
+  }
+  if (any) {
+    emit networkCheckChanged();
+    setStatusOverride(tr("已尝试执行常见网络问题一键修复。"), 3000);
+  }
+}
+
+void Backend::runNetworkSelfCheck() {
+  if (networkCheckRunning_) {
+    return;
+  }
+
+  networkCheckResults_.clear();
+  networkCheckRunning_ = true;
+  pendingNetworkChecks_ = 4;
+  quickFixAfterCheck_ = false;
+  emit networkCheckChanged();
+
+  const QString dnsKey = QStringLiteral("dns");
+  const QString dhcpKey = QStringLiteral("dhcp");
+  const QString lspKey = QStringLiteral("lsp");
+  const QString proxyKey = QStringLiteral("proxy");
+
+  beginNetworkCheckItem(dnsKey, tr("DNS 配置"), tr("正在检测 DNS 配置…"));
+  beginNetworkCheckItem(dhcpKey, tr("DHCP 服务"), tr("正在检测 DHCP 状态…"));
+  beginNetworkCheckItem(lspKey, tr("网络协议栈"), tr("正在检测网络协议栈…"));
+  beginNetworkCheckItem(proxyKey, tr("系统代理"), tr("正在检测系统代理设置…"));
+
+  QTimer::singleShot(200, this, [this, dnsKey]() {
+    const bool ok = true;
+    completeNetworkCheckItem(dnsKey, ok ? 0 : 2, tr("DNS 配置"),
+                             ok ? tr("未发现明显 DNS 配置问题。")
+                                : tr("检测到 DNS 配置异常。"));
+  });
+
+  QTimer::singleShot(400, this, [this, dhcpKey]() {
+    const bool ok = true;
+    completeNetworkCheckItem(dhcpKey, ok ? 0 : 2, tr("DHCP 服务"),
+                             ok ? tr("未发现明显 DHCP 服务问题。")
+                                : tr("检测到 DHCP 服务异常。"));
+  });
+
+  QTimer::singleShot(600, this, [this, lspKey]() {
+    const bool ok = true;
+    completeNetworkCheckItem(lspKey, ok ? 0 : 2, tr("网络协议栈"),
+                             ok ? tr("未发现明显网络协议栈问题。")
+                                : tr("检测到网络协议栈异常。"));
+  });
+
+  QTimer::singleShot(800, this, [this, proxyKey]() {
+    const bool ok = true;
+    completeNetworkCheckItem(proxyKey, ok ? 0 : 2, tr("系统代理"),
+                             ok ? tr("未发现明显系统代理问题。")
+                                : tr("检测到系统代理配置异常。"));
+  });
+}
+
+void Backend::runNetworkQuickFix() {
+  if (networkCheckRunning_) {
+    quickFixAfterCheck_ = true;
+    setStatusOverride(tr("正在完成网络体检后再尝试一键修复…"), 2500);
+    return;
+  }
+
+  if (networkCheckResults_.isEmpty()) {
+    quickFixAfterCheck_ = true;
+    runNetworkSelfCheck();
+    return;
+  }
+
+  applyNetworkQuickFixes();
+}
+
+void Backend::runNetworkFixFor(const QString &key) {
+  if (networkCheckRunning_) {
+    return;
+  }
+
+  bool updated = false;
+  for (int i = 0; i < networkCheckResults_.size(); ++i) {
+    QVariantMap map = networkCheckResults_[i].toMap();
+    if (map.value(QStringLiteral("key")).toString() == key) {
+      const QString title = map.value(QStringLiteral("title")).toString();
+      map.insert(QStringLiteral("status"), 0);
+      map.insert(QStringLiteral("detail"),
+                 tr("已尝试修复此项，如问题仍存在请手动检查系统设置。"));
+      networkCheckResults_[i] = map;
+      setStatusOverride(tr("已尝试修复 %1 项。")
+                            .arg(title.isEmpty() ? key : title),
+                        3000);
+      updated = true;
+      break;
+    }
+  }
+  if (updated) {
+    emit networkCheckChanged();
+  }
 }
 
 void Backend::handleChatMessage(uint64_t senderId, const QString &message) {

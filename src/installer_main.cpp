@@ -5,6 +5,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QIcon>
+#include <QDate>
 
 int main(int argc, char *argv[])
 {
@@ -12,7 +13,12 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName(QStringLiteral("chunyuvpn-installer"));
 
     QGuiApplication app(argc, argv);
-    app.setWindowIcon(QIcon(QStringLiteral(":/qt/qml/chunyuvpn/qml/ConnectTool/logo.ico")));
+    const QDate today = QDate::currentDate();
+    const QString iconPath =
+        (today.month() == 12 && today.day() == 25)
+            ? QStringLiteral(":/qt/qml/chunyuvpn/qml/chunyuvpn/logo-Xmas.ico")
+            : QStringLiteral(":/qt/qml/chunyuvpn/qml/chunyuvpn/logo.ico");
+    app.setWindowIcon(QIcon(iconPath));
 
     InstallerBackend backend;
 

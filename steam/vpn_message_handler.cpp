@@ -3,6 +3,7 @@
 #include "steam_vpn_bridge.h"
 #include "net/vpn_protocol.h"
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <steam_api.h>
 #include <isteamnetworkingmessages.h>
@@ -103,12 +104,18 @@ void VpnMessageHandler::pollMessages() {
     const uint8_t *data = static_cast<const uint8_t *>(msg->m_pData);
     const size_t size = msg->m_cbSize;
     const CSteamID sender = msg->m_identityPeer.GetSteamID();
-    if (size >= sizeof(VpnMessageHeader) &&
-        static_cast<VpnMessageType>(data[0]) == VpnMessageType::SESSION_HELLO) {
-      msg->Release();
-      continue;
+    bool handled = false;
+    if (size >= sizeof(VpnMessageHeader)) {
+      VpnMessageHeader header;
+      std::memcpy(&header, data, sizeof(VpnMessageHeader));
+      if (header.type == VpnMessageType::SESSION_HELLO) {
+        if (manager_) {
+          manager_->handleSessionHello(data, size, sender);
+        }
+        handled = true;
+      }
     }
-    if (manager_) {
+    if (!handled && manager_) {
       manager_->handleIncomingVpnMessage(data, size, sender);
     }
     msg->Release();

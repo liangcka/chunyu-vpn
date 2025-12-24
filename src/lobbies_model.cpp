@@ -31,16 +31,18 @@ QVariant LobbiesModel::data(const QModelIndex &index, int role) const {
     return entry.ping >= 0 ? QVariant(entry.ping) : QVariant();
   case ModeRole:
     return entry.mode;
+  case HasPasswordRole:
+    return entry.hasPassword;
   default:
     return {};
   }
 }
 
 QHash<int, QByteArray> LobbiesModel::roleNames() const {
-  return {{LobbyIdRole, "lobbyId"},     {NameRole, "name"},
-          {HostNameRole, "hostName"},   {HostIdRole, "hostId"},
-          {MemberCountRole, "members"}, {PingRole, "ping"},
-          {ModeRole, "mode"}};
+  return {{LobbyIdRole, "lobbyId"},      {NameRole, "name"},
+          {HostNameRole, "hostName"},    {HostIdRole, "hostId"},
+          {MemberCountRole, "members"},  {PingRole, "ping"},
+          {ModeRole, "mode"},            {HasPasswordRole, "hasPassword"}};
 }
 
 void LobbiesModel::setLobbies(std::vector<Entry> list) {

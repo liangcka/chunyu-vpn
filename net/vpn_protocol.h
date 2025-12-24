@@ -20,6 +20,9 @@ constexpr int64_t HEARTBEAT_EXPIRY_MS = 180000;
 constexpr size_t NODE_ID_SIZE = 32;
 using NodeID = std::array<uint8_t, NODE_ID_SIZE>;
 
+constexpr size_t VPN_VERSION_MAX_LEN = 32;
+constexpr uint8_t VPN_CAP_PASSWORD = 0x01;
+
 enum class VpnMessageType : uint8_t {
   IP_PACKET = 1,
   ROUTE_UPDATE = 3,
@@ -68,6 +71,11 @@ struct HeartbeatPayload {
   uint32_t ipAddress;
   NodeID nodeId;
   int64_t timestampMs;
+};
+
+struct SessionHelloPayload {
+  char version[VPN_VERSION_MAX_LEN];
+  uint8_t capabilities;
 };
 #pragma pack(pop)
 

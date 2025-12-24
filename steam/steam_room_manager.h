@@ -10,6 +10,7 @@
 #include <tuple>
 
 inline constexpr const char kLobbyKeyMode[] = "ct_mode";
+inline constexpr const char kLobbyKeyPasswordHash[] = "ct_pwd_hash";
 
 class SteamNetworkingManager; // Forward declaration
 class SteamVpnNetworkingManager;
@@ -63,6 +64,7 @@ public:
     int memberCount = 0;
     int pingMs = -1;
     std::string mode;
+    bool hasPassword = false;
   };
 
   SteamRoomManager(SteamNetworkingManager *networkingManager);

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Network QmlModels Core5Compat Widgets)
 
 # Read version from git tag if available
-set(CONNECTTOOL_VERSION "0.8.41")
+set(CONNECTTOOL_VERSION "0.85")
 if(DEFINED ENV{CONNECTTOOL_VERSION})
     set(CONNECTTOOL_VERSION "$ENV{CONNECTTOOL_VERSION}")
 endif()
@@ -211,15 +211,16 @@ qt_add_qml_module(chunyuvpn
     URI chunyuvpn
     VERSION 1.0
     QML_FILES
-        qml/ConnectTool/Main.qml
+        qml/chunyuvpn/Main.qml
     RESOURCES
-        qml/ConnectTool/GitHub.svg
-        qml/ConnectTool/QQ.svg
-        qml/ConnectTool/Menu.svg
-        qml/ConnectTool/moon.svg
-        qml/ConnectTool/sun.svg
-        qml/ConnectTool/notify.wav
-        qml/ConnectTool/logo.ico)
+        qml/chunyuvpn/GitHub.svg
+        qml/chunyuvpn/QQ.svg
+        qml/chunyuvpn/Menu.svg
+        qml/chunyuvpn/moon.svg
+        qml/chunyuvpn/sun.svg
+        qml/chunyuvpn/notify.wav
+        qml/chunyuvpn/logo.ico
+        qml/chunyuvpn/logo-Xmas.ico)
 
 target_compile_definitions(chunyuvpn PRIVATE CONNECTTOOL_VERSION="${CONNECTTOOL_VERSION}")
 

@@ -26,7 +26,7 @@ Item {
                 anchors.centerIn: parent
                 width: 56
                 height: 56
-                source: "../qml/ConnectTool/logo.ico"
+                source: "../qml/chunyuvpn/logo.ico"
                 fillMode: Image.PreserveAspectFit
                 smooth: true
             }
